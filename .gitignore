@@ -1,0 +1,5 @@
+flights.db
+flights.db-*
+*.db-journal
+__pycache__/
+.DS_Store

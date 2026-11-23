@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fare Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/leaflet/leaflet.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="mark" href="#" data-tab="search">FARE<span>/</span>LOG</a>
+  <nav>
+    <a href="#" data-tab="search" class="on">Search</a>
+    <a href="#" data-tab="saved">Saved flights <span id="saved-count"></span></a>
+    <a href="#" data-tab="settings">Settings</a>
+  </nav>
+  <div id="mode" class="mode"></div>
+</header>
+
+<main>
+  <!-- SEARCH -->
+  <section id="tab-search" class="tab on">
+    <form id="search-form" class="search" autocomplete="off">
+      <div class="route-field">
+        <label for="from">From</label>
+        <input id="from" list="city-list" placeholder="TOKYO" spellcheck="false" required>
+      </div>
+      <div class="route-field">
+        <label for="to">To</label>
+        <input id="to" list="city-list" placeholder="SEOUL" spellcheck="false" required>
+      </div>
+      <datalist id="city-list"></datalist>
+      <div class="field">
+        <label for="nights">Trip</label>
+        <select id="nights">
+          <option value="0">One way</option>
+          <option value="2">2 nights</option>
+          <option value="3" selected>3 nights</option>
+          <option value="4">4 nights</option>
+          <option value="5">5 nights</option>
+          <option value="7">7 nights</option>
+          <option value="10">10 nights</option>
+          <option value="14">14 nights</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="start">Earliest date</label>
+        <input id="start" type="date">
+      </div>
+      <div class="field small">
+        <label for="adults">People</label>
+        <input id="adults" type="number" min="1" max="9" value="1">
+      </div>
+      <div class="field small">
+        <label for="bags">Bags each</label>
+        <input id="bags" type="number" min="0" max="3" value="1" title="Checked bags per person">
+      </div>
+      <div class="field">
+        <label for="budget">Budget</label>
+        <div class="budget-in">
+          <select id="currency-pick" title="Currency for prices and budget">
+            <option>JPY</option><option>USD</option><option>EUR</option><option>GBP</option><option>AUD</option>
+            <option>CAD</option><option>KRW</option><option>CNY</option><option>HKD</option><option>TWD</option>
+            <option>SGD</option><option>THB</option><option>NZD</option><option>CHF</option><option>INR</option>
+            <option>PHP</option><option>VND</option><option>MYR</option><option>IDR</option>
+          </select>
+          <input id="budget" type="number" min="0" step="any" placeholder="e.g. 120000">
+        </div>
+      </div>
+      <button type="submit" class="go">Search</button>
+    </form>
+    <div id="recent" class="recent"></div>
+    <p id="search-msg" class="msg"></p>
+
+    <div id="results" class="results hidden">
+      <div class="col-main">
+        <div class="block">
+          <div class="block-head">
+            <h2>Cheapest dates</h2>
+            <span id="cal-note" class="sub"></span>
+          </div>
+          <div id="calendar" class="calendar"></div>
+          <div id="cheapest"></div>
+        </div>
+
+        <div class="block" id="flights-block" hidden>
+          <div class="block-head">
+            <h2 id="flights-title">Flights</h2>
+            <span id="flights-note" class="sub"></span>
+          </div>
+          <div id="insight" class="insight"></div>
+          <div id="flights" class="board"></div>
+        </div>
+
+        <div class="block" id="sites-block" hidden>
+          <div class="block-head">
+            <h2>Every site, full price</h2>
+            <span id="sites-note" class="sub"></span>
+          </div>
+          <div id="sites"></div>
+        </div>
+      </div>
+
+      <aside class="col-side">
+        <div id="map" class="map"></div>
+        <div class="block" id="budget-block">
+          <h2>Budget</h2>
+          <div id="budget-card"></div>
+        </div>
+        <div class="block" id="hotels-block" hidden>
+          <div class="block-head">
+            <h2>Hotels</h2>
+            <span class="sub">3★ and up, no hostels</span>
+          </div>
+          <div id="hotels"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- SAVED -->
+  <section id="tab-saved" class="tab">
+    <div class="block-head">
+      <h2>Saved flights</h2>
+      <span class="sub">Every flight you open is saved here. Prices update only when you search that date again or press Check now.</span>
+    </div>
+    <div id="saved-list"></div>
+    <div id="saved-detail"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab">
+    <div class="settings">
+      <div class="block">
+        <h2>Live prices</h2>
+        <p>Flight prices come straight from Google Flights for free, with no key and no limit.
+          To also see what each site (Expedia, Trip.com, the airline…) charges for a flight, and real hotel prices,
+          add a free SerpApi key: sign up at
+          <a href="https://serpapi.com/users/sign_up" target="_blank" rel="noopener">serpapi.com</a>,
+          copy the key from your dashboard and paste it here. The free plan covers about 250 searches a month.</p>
+        <label for="api-key">SerpApi key</label>
+        <input id="api-key" type="password" placeholder="Paste key" spellcheck="false">
+        <label for="currency">Currency</label>
+        <input id="currency" maxlength="3" value="JPY">
+        <button id="save-settings" class="go">Save</button>
+        <p id="settings-msg" class="msg"></p>
+      </div>
+      <div class="block">
+        <h2>What a search costs</h2>
+        <p>Free, always: the list of flights for a date. Nothing is looked up unless you search.</p>
+        <p>With a SerpApi key: cheapest-dates calendar and hotels cost one search each. Opening a flight to compare
+          sites costs two (three for a round trip). "Compare all sites now" on a saved flight costs two or three.
+          Repeat searches within six hours are free. Without a key the calendar is built from free Google Flights
+          lookups (slower) and hotel prices are examples.</p>
+      </div>
+      <div class="block wide">
+        <h2>Bag fees</h2>
+        <p>Used only when a site doesn't say what a checked bag costs. Amount is for one bag, one person, one direction.</p>
+        <textarea id="bag-table" rows="18" spellcheck="false"></textarea>
+        <button id="save-bags" class="go">Save bag fees</button>
+        <p id="bags-msg" class="msg"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/leaflet/leaflet.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "_note": "Rough fee for ONE checked bag, per person, per flight direction, in your currency (default JPY). Used only when a site doesn't say what bags cost. Edit freely in the app's Settings.",
+  "full_service_included": [
+    "Japan Airlines", "ANA", "Korean Air", "Asiana", "Asiana Airlines", "EVA Air", "China Airlines",
+    "Cathay Pacific", "Singapore Airlines", "Thai Airways", "Vietnam Airlines", "Malaysia Airlines",
+    "Philippine Airlines", "Garuda Indonesia", "United", "American", "Delta", "Air Canada",
+    "Lufthansa", "British Airways", "Air France", "KLM", "Finnair", "Emirates", "Qatar Airways",
+    "Turkish Airlines", "Qantas", "Air New Zealand", "Hawaiian Airlines", "China Eastern",
+    "China Southern", "Air China", "Starlux", "STARLUX Airlines"
+  ],
+  "airlines": {
+    "Peach": 4500,
+    "ZIPAIR": 5500,
+    "Jetstar": 4500,
+    "Jetstar Japan": 4000,
+    "Spring Japan": 4000,
+    "Jeju Air": 5000,
+    "T'way Air": 5000,
+    "Jin Air": 4000,
+    "Air Busan": 4500,
+    "Air Seoul": 4500,
+    "Eastar Jet": 4500,
+    "Scoot": 6500,
+    "AirAsia": 5500,
+    "AirAsia X": 6500,
+    "Thai AirAsia": 5500,
+    "VietJet": 4500,
+    "Vietjet": 4500,
+    "Cebu Pacific": 5000,
+    "Tigerair Taiwan": 5000,
+    "HK Express": 5500,
+    "Spring Airlines": 4500
+  },
+  "unknown_airline": 5000
+}
