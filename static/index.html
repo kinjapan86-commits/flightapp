@@ -114,8 +114,15 @@
         <div class="block" id="hotels-block" hidden>
           <div class="block-head">
             <h2>Hotels</h2>
-            <span class="sub">3★ and up, no hostels</span>
+            <span class="sub">no hostels, guesthouses or capsules</span>
           </div>
+          <form id="hotel-opts" class="hotel-opts" autocomplete="off">
+            <label class="wide">Area <input id="h-area" placeholder="Anywhere in the city, or e.g. Myeongdong"></label>
+            <label>Stars <select id="h-stars"><option value="3">3★ and up</option><option value="4">4★ and up</option><option value="5">5★ only</option></select></label>
+            <label>Max / night <input id="h-max" type="number" min="0" step="any" placeholder="any"></label>
+            <label>Sort <select id="h-sort"><option value="price">Cheapest</option><option value="rating">Best rated</option></select></label>
+            <button type="submit" class="btn">Update</button>
+          </form>
           <div id="hotels"></div>
         </div>
       </aside>

@@ -194,14 +194,22 @@ def api_hotels(body):
     nights = _int(body.get("nights"), 3, 1, 30)
     check_out = (datetime.strptime(check_in, "%Y-%m-%d").date() + timedelta(days=nights)).isoformat()
     adults = _int(body.get("adults"), 1, 1, 9)
+    opts = {
+        "area": (body.get("area") or "").strip()[:60],
+        "min_stars": _int(body.get("min_stars"), 3, 3, 5),
+        "max_price": _int(body.get("max_price"), 0, 0, 10**9) or None,
+        "sort": "rating" if body.get("sort") == "rating" else "price",
+    }
     prov = providers.get_provider()
-    key = "hotel:%s:%s" % (prov.name, json.dumps([city, check_in, check_out, adults]))
-    hotels, from_cache = cache.cached(key, lambda: prov.hotels(city, check_in, check_out, adults))
+    key = "hotel:%s:%s" % (prov.name, json.dumps([city, check_in, check_out, adults, opts], sort_keys=True))
+    hotels, from_cache = cache.cached(key, lambda: prov.hotels(city, check_in, check_out, adults, **opts))
     rooms = max(1, math.ceil(adults / 2))
     nightly = [h["nightly"] for h in hotels]
     typical = statistics.median(nightly) if nightly else None
     return {
-        "hotels": hotels[:8],
+        "hotels": hotels[:15],
+        "options": opts,
+        "examples": prov.name == "free",
         "nights": nights,
         "rooms": rooms,
         "typical_nightly": typical,

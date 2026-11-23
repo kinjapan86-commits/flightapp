@@ -141,6 +141,7 @@ $("#currency-pick").addEventListener("change", async (e) => {
 $("#search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#search-msg").textContent = "";
+  if (state.route && state.route.dest.city.toUpperCase() !== $("#to").value.trim().toUpperCase()) $("#h-area").value = "";
   state.nights = +$("#nights").value;
   state.adults = +$("#adults").value || 1;
   state.bags = +$("#bags").value || 0;
@@ -151,6 +152,7 @@ $("#search-form").addEventListener("submit", async (e) => {
   let cal;
   try {
     $("#results").classList.remove("hidden");
+    setTimeout(() => map && map.invalidateSize(), 50);
     $("#flights-block").hidden = true;
     $("#sites-block").hidden = true;
     $("#hotels-block").hidden = true;
@@ -219,7 +221,7 @@ function renderCalendar(cal) {
     ` · price per ${state.adults > 1 ? state.adults + " people" : "person"}, before bags · hover a day for the airline`;
   const btn = (c) => `<button data-out="${c.out_date}" data-ret="${esc(c.ret_date || "")}">${niceDate(c.out_date)}${c.ret_date ? " – " + niceDate(c.ret_date, { day: "numeric", month: "short" }) : ""} · ${money(c.price)}${c.airline ? ` <small>${esc(c.airline)}</small>` : ""}</button>`;
   $("#cheapest").innerHTML = (cal.cheapest.length ? `<div class="cheapest"><span class="sub">Cheapest:</span>${cal.cheapest.map(btn).join("")}</div>` : "") +
-    (priciest.length > 3 || cal.prices.length > 5 ? `<div class="cheapest priciest"><span class="sub">Most expensive:</span>${priciest.map(btn).join("")}</div>` : "");
+    (cal.prices.length > 5 && priciest.length && priciest[0].price > vals[0] ? `<div class="cheapest priciest"><span class="sub">Most expensive:</span>${priciest.map(btn).join("")}</div>` : "");
   $$("#cheapest button").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret)));
 }
 
@@ -379,15 +381,15 @@ async function loadHotels() {
   const nights = state.nights || 3;
   $("#hotels-block").hidden = false;
   loading($("#hotels"), "Loading hotels");
+  state.hotelPick = null;
   try {
     const h = await api("/api/hotels", {
       city: state.route.dest.city, check_in: state.outDate, nights, adults: state.adults,
+      area: $("#h-area").value, min_stars: +$("#h-stars").value, max_price: +$("#h-max").value || 0,
+      sort: $("#h-sort").value,
     });
     state.hotel = h;
-    $("#hotels").innerHTML = (state.nights ? "" : `<p class="note">One-way trip, so this assumes 3 nights.</p>`) +
-      (h.hotels.length ? h.hotels.map((x) => `<div class="hotel"><div>${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}
-        <div class="stars">${x.stars ? x.stars + "★" : ""}${x.rating ? " · rated " + x.rating : ""}</div></div>
-        <div class="n">${money(x.nightly)}<span class="sub"> /night</span></div></div>`).join("") : `<p class="sub">No hotels found.</p>`);
+    renderHotels();
     drawHotels(h.hotels);
     renderBudget();
     loadStatus();
@@ -396,14 +398,37 @@ async function loadHotels() {
   }
 }
 
+function renderHotels() {
+  const h = state.hotel;
+  const pick = state.hotelPick;
+  $("#hotels").innerHTML = (h.examples ? `<p class="note">Example hotels and prices. Add a SerpApi key in Settings for real ones.</p>` : "") +
+    (state.nights ? "" : `<p class="note">One-way trip, so this assumes 3 nights.</p>`) +
+    (h.hotels.length ? `<p class="note">Click a hotel to use its price in your budget.</p>` + h.hotels.map((x, i) => `<div class="hotel ${pick === i ? "picked" : ""}" data-i="${i}">
+      <div>${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}${pick === i ? `<span class="pick">your pick</span>` : ""}
+        <div class="stars">${x.stars ? x.stars + "★" : ""}${x.rating ? " · rated " + x.rating : ""}</div></div>
+      <div class="n">${money(x.nightly)}<span class="sub"> /night</span></div></div>`).join("")
+      : `<p class="sub">No hotels match. Try another area, fewer stars or a higher max price.</p>`);
+  $$("#hotels .hotel").forEach((el) => el.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    const i = +el.dataset.i;
+    state.hotelPick = state.hotelPick === i ? null : i;
+    renderHotels(); renderBudget();
+  }));
+}
+
+$("#hotel-opts").addEventListener("submit", (e) => { e.preventDefault(); if (state.route && state.outDate) loadHotels(); });
+$$("#h-stars, #h-sort").forEach((s) => s.addEventListener("change", () => { if (state.route && state.outDate) loadHotels(); }));
+
 function renderBudget() {
   const el = $("#budget-card");
   const budget = (state.status && state.status.budget) || 0;
   const f = state.flightTotal;
-  const h = state.hotel && state.hotel.estimate;
+  const picked = state.hotel && state.hotelPick != null ? state.hotel.hotels[state.hotelPick] : null;
+  const nightly = picked ? picked.nightly : state.hotel && state.hotel.typical_nightly;
+  const h = state.hotel && nightly ? nightly * state.hotel.nights * state.hotel.rooms : null;
   if (f == null && h == null) { el.innerHTML = `<p class="sub">Pick a date to see the trip cost.</p>`; return; }
   const total = (f || 0) + (h || 0);
-  const hn = state.hotel ? `${state.hotel.nights} night${state.hotel.nights > 1 ? "s" : ""}${state.hotel.rooms > 1 ? " × " + state.hotel.rooms + " rooms" : ""} at ~${money(state.hotel.typical_nightly)}` : "";
+  const hn = state.hotel ? `${state.hotel.nights} night${state.hotel.nights > 1 ? "s" : ""}${state.hotel.rooms > 1 ? " × " + state.hotel.rooms + " rooms" : ""}${picked ? " at " + picked.name + ", " + money(nightly) : " at ~" + money(nightly) + " (typical)"}` : "";
   let html = `
     <div class="bud-line"><span>Flights${state.flightTotalKind === "from" ? " (from, before bags)" : " (full price)"}</span><span>${money(f)}</span></div>
     <div class="bud-line"><span>Hotel <span class="sub">${esc(hn)}</span></span><span>${h ? money(h) : "–"}</span></div>

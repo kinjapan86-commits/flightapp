@@ -122,23 +122,24 @@ class SerpApiProvider:
         data = self._get(q, "calendar")
         return _find_calendar_prices(data)
 
-    def hotels(self, city, check_in, check_out, adults):
+    def hotels(self, city, check_in, check_out, adults, area="", min_stars=3, max_price=None, sort="price"):
         q = {
             "engine": "google_hotels",
-            "q": "hotels in %s" % city,
+            "q": "hotels in %s, %s" % (area, city) if area else "hotels in %s" % city,
             "check_in_date": check_in,
             "check_out_date": check_out,
             "adults": adults,
-            "hotel_class": "3,4,5",
-            "sort_by": 3,  # lowest price first
+            "hotel_class": ",".join(str(s) for s in range(min_stars, 6)),
+            "max_price": max_price,
+            "sort_by": 8 if sort == "rating" else 3,  # 8 highest rating, 3 lowest price
         }
         data = self._get(q, "hotels")
         out = []
         for h in data.get("properties", []):
-            if (h.get("type") or "hotel").lower() != "hotel":
+            if (h.get("type") or "hotel").lower() != "hotel" or _not_a_hotel(h.get("name")):
                 continue
             stars = h.get("extracted_hotel_class") or 0
-            if stars and stars < 3:
+            if stars and stars < min_stars:
                 continue
             nightly = (h.get("rate_per_night") or {}).get("extracted_lowest")
             if not nightly:
@@ -153,7 +154,26 @@ class SerpApiProvider:
                 "lon": gps.get("longitude"),
                 "link": h.get("link"),
             })
-        return out
+        return [h for h in out if not max_price or h["nightly"] <= max_price]
+
+
+_NOT_HOTEL = ("hostel", "guesthouse", "guest house", "capsule", "dormitory", "dorm ", "backpacker",
+              "bunk", "sharehouse", "share house")
+
+
+def _not_a_hotel(name):
+    n = (name or "").lower()
+    return any(w in n for w in _NOT_HOTEL)
+
+
+def _hotel_filters(hotels, min_stars, max_price, sort):
+    out = [h for h in hotels if (h["stars"] or 0) >= min_stars and not _not_a_hotel(h["name"])
+           and (not max_price or h["nightly"] <= max_price)]
+    if sort == "rating":
+        out.sort(key=lambda h: -(h["rating"] or 0))
+    else:
+        out.sort(key=lambda h: h["nightly"])
+    return out
 
 
 def _find_calendar_prices(data):
@@ -328,20 +348,22 @@ class DemoProvider:
             day += timedelta(days=1)
         return out
 
-    def hotels(self, city, check_in, check_out, adults):
-        r = random.Random(_seed(city, check_in))
+    def hotels(self, city, check_in, check_out, adults, area="", min_stars=3, max_price=None, sort="price"):
+        r = random.Random(_seed(city, area, check_in))
         lat, lon = 35.68, 139.76
         import cities
         info = cities.resolve(city)
         if info and info.get("lat") is not None:
             lat, lon = info["lat"], info["lon"]
         names = ["Grand %s Hotel", "Hotel %s Central", "%s Bay Hotel", "The %s Plaza",
-                 "%s Station Hotel", "Royal %s", "%s Garden Hotel", "Park Hotel %s"]
+                 "%s Station Hotel", "Royal %s", "%s Garden Hotel", "Park Hotel %s",
+                 "%s Tower Hotel", "Hotel %s Square", "%s Riverside Hotel", "The %s Residence"]
+        place = (area or city).title()
         out = []
         for i, n in enumerate(names):
             stars = 3 + (i % 3)
             out.append({
-                "name": n % city.title(),
+                "name": n % place,
                 "stars": stars,
                 "rating": round(3.6 + r.random() * 1.2, 1),
                 "nightly": int(round((6000 + stars * 4000) * (0.8 + r.random() * 0.6), -2)),
@@ -349,8 +371,7 @@ class DemoProvider:
                 "lon": lon + (r.random() - 0.5) * 0.06,
                 "link": None,
             })
-        out.sort(key=lambda h: h["nightly"])
-        return out
+        return _hotel_filters(out, min_stars, max_price, sort)
 
 
 # ---------------------------------------------------------------------------
@@ -453,8 +474,8 @@ class FreeProvider:
             raise ProviderError("Couldn't get prices from Google Flights for these dates. Try again in a few minutes.")
         return out
 
-    def hotels(self, city, check_in, check_out, adults):
-        return DemoProvider(self.settings).hotels(city, check_in, check_out, adults)
+    def hotels(self, city, check_in, check_out, adults, **opts):
+        return DemoProvider(self.settings).hotels(city, check_in, check_out, adults, **opts)
 
 
 class HybridProvider:
@@ -503,8 +524,8 @@ class HybridProvider:
     def calendar(self, p, start, end, trip_days):
         return self.serp.calendar(p, start, end, trip_days)
 
-    def hotels(self, city, check_in, check_out, adults):
-        return self.serp.hotels(city, check_in, check_out, adults)
+    def hotels(self, city, check_in, check_out, adults, **opts):
+        return self.serp.hotels(city, check_in, check_out, adults, **opts)
 
 
 def get_provider():
