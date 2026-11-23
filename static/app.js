@@ -108,12 +108,10 @@ async function loadStatus() {
     if (seen.has(k)) return false;
     seen.add(k); return true;
   }).slice(0, 6);
-  $("#recent").innerHTML = rec.length ? `<span class="sub">Recent:</span>` + rec.map((r) =>
+  const recentHtml = rec.length ? `<span class="sub">Recent:</span>` + rec.map((r) =>
     `<button type="button" data-q="${esc(r.params.q)}" data-n="${r.params.nights}">${esc(r.params.q)}${r.params.nights ? " · " + r.params.nights + "n" : " · one way"}</button>`).join("") : "";
-  $$("#recent button").forEach((b) => b.addEventListener("click", () => {
-    const [a, z] = splitRoute(b.dataset.q);
-    $("#from").value = a; $("#to").value = z; $("#nights").value = b.dataset.n; $("#search-form").requestSubmit();
-  }));
+  // Only redraw when the list changed, so a click in progress isn't lost.
+  if ($("#recent").innerHTML !== recentHtml) $("#recent").innerHTML = recentHtml;
   refreshSavedCount();
 }
 
@@ -125,6 +123,13 @@ async function refreshSavedCount() {
 /* ---------- search ---------- */
 
 $("#start").value = addDays(iso(new Date()), 7);
+
+$("#recent").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-q]");
+  if (!b) return;
+  const [a, z] = splitRoute(b.dataset.q);
+  $("#from").value = a; $("#to").value = z; $("#nights").value = b.dataset.n; $("#search-form").requestSubmit();
+});
 
 function routeQuery() { return `${$("#from").value.trim()} > ${$("#to").value.trim()}`; }
 function splitRoute(q) {
@@ -244,16 +249,16 @@ function renderCalendar(cal) {
     <span><i class="lg2"></i>expensive</span><span><i class="lg1 lgb"></i>cheapest days</span><span><i class="lg1 lgt"></i>priciest days</span></div>`;
   $("#calendar").innerHTML = legend + grid;
 
-  $$("#calendar .day[data-out]").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret)));
+  $$("#calendar .day[data-out]").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret, true)));
   $("#cal-note").textContent = (cal.nights ? `${cal.nights}-night round trip` : "One way") +
     ` · price per ${state.adults > 1 ? state.adults + " people" : "person"}, before bags · hover a day for the airline`;
   const btn = (c) => `<button data-out="${c.out_date}" data-ret="${esc(c.ret_date || "")}">${niceDate(c.out_date)}${c.ret_date ? " – " + niceDate(c.ret_date, { day: "numeric", month: "short" }) : ""} · ${money(c.price)}${c.airline ? ` <small>${esc(c.airline)}</small>` : ""}</button>`;
   $("#cheapest").innerHTML = (cal.cheapest.length ? `<div class="cheapest"><span class="sub">Cheapest:</span>${cal.cheapest.map(btn).join("")}</div>` : "") +
     (cal.prices.length > 5 && priciest.length && priciest[0].price > vals[0] ? `<div class="cheapest priciest"><span class="sub">Most expensive:</span>${priciest.map(btn).join("")}</div>` : "");
-  $$("#cheapest button").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret)));
+  $$("#cheapest button").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret, true)));
 }
 
-async function pickDate(out, ret) {
+async function pickDate(out, ret, byClick) {
   state.outDate = out;
   state.retDate = state.nights ? (ret || addDays(out, state.nights)) : null;
   state.outbound = null;
@@ -265,6 +270,7 @@ async function pickDate(out, ret) {
   $("#flights-note").textContent = state.nights ? "Pick your outbound flight" : "Pick a flight to compare sites";
   $("#insight").innerHTML = "";
   loading($("#flights"), "Loading flights");
+  if (byClick) $("#flights-block").scrollIntoView({ behavior: "smooth", block: "start" });
   loadHotels();
   try {
     const res = await api("/api/search", tripParams());

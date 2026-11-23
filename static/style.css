@@ -235,3 +235,10 @@ tr.top-pick td:first-child { box-shadow: inset 3px 0 0 var(--good); }
 
 .top nav a { white-space: nowrap; }
 .mode { text-align: right; }
+
+/* make every click visibly register */
+button, .row, .hotel, .day[data-out] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button:active, .board .row:active, .hotel:active, .day[data-out]:active, .recent button:active, .cheapest button:active {
+  transform: translateY(1px); filter: brightness(0.93);
+}
+.day[data-out], .board .row, .hotel, .filters button, .recent button, .cheapest button { user-select: none; }
