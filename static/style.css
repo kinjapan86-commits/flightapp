@@ -50,10 +50,12 @@ main { padding: 24px 32px 64px; max-width: 1440px; margin: 0 auto; }
 .search input, .search select {
   border: 0; background: transparent; font: 16px var(--sans); color: var(--ink); padding: 0; outline: none; min-width: 0;
 }
-.route-field { flex: 1 1 200px; }
+.route-field { flex: 1 1 50%; border-bottom: 1px solid var(--rule); }
+.route-field + .route-field { border-right: 0; }
+.search > .field { flex: 1 1 auto; }
 .route-field input { font: 500 26px/1.1 var(--mono); text-transform: uppercase; letter-spacing: .02em; }
 .route-field input::placeholder { color: var(--rule); }
-.field { flex: 0 0 auto; }
+.field { flex: 1 1 auto; }
 .field input[type=number] { width: 110px; }
 .field.small input { width: 56px; }
 .go {
