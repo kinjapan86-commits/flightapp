@@ -213,7 +213,7 @@ tr.top-pick td:first-child { box-shadow: inset 3px 0 0 var(--good); }
 .field input#budget { width: 120px; }
 
 /* calendar extremes */
-.day.top { outline: 2px solid var(--bad); outline-offset: -2px; }
+.day.priciest { outline: 2px solid var(--bad); outline-offset: -2px; }
 .day.q2 .p { color: var(--bad); }
 .cal-legend { grid-column: 1 / -1; width: 100%; flex-basis: 100%; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font: 12px var(--mono); color: var(--ink-2); margin: 4px 0 10px; }
 .cal-legend i { display: inline-block; width: 14px; height: 14px; vertical-align: -3px; margin-right: 5px; }
@@ -242,3 +242,16 @@ button:active, .board .row:active, .hotel:active, .day[data-out]:active, .recent
   transform: translateY(1px); filter: brightness(0.93);
 }
 .day[data-out], .board .row, .hotel, .filters button, .recent button, .cheapest button { user-select: none; }
+
+/* budget */
+.day.over { opacity: .35; }
+.day.fits::after { content: "✓"; position: absolute; top: 2px; right: 4px; font-size: 11px; color: var(--good); font-weight: 600; }
+.day { position: relative; }
+.day.sel.fits::after { color: var(--paper); }
+.cal-legend .lgf { color: var(--good); font-size: 11px; font-weight: 600; text-align: center; line-height: 14px; font-style: normal; }
+.fit-note { grid-column: 1 / -1; margin: 0 0 6px; font-size: 13px; }
+.fit-note.ok { color: var(--good); }
+.fit-note.over { color: var(--bad); }
+.btag { display: block; font: 10px var(--mono); text-transform: uppercase; letter-spacing: .03em; margin-top: 2px; }
+.btag.ok { color: var(--good); }
+.btag.over { color: var(--bad); }

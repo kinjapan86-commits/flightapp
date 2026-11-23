@@ -131,6 +131,29 @@ $("#recent").addEventListener("click", (e) => {
   $("#from").value = a; $("#to").value = z; $("#nights").value = b.dataset.n; $("#search-form").requestSubmit();
 });
 
+/* ---------- budget helpers ---------- */
+function budget() { return +$("#budget").value || 0; }
+function rooms() { return Math.max(1, Math.ceil((state.adults || 1) / 2)); }
+function hotelNights() { return state.nights || 3; }
+// Hotel cost estimate: your picked hotel, else the typical price found, else nothing yet.
+function hotelEstimate() {
+  const h = state.hotel;
+  if (!h) return null;
+  const picked = state.hotelPick != null ? h.hotels[state.hotelPick] : null;
+  const nightly = picked ? picked.nightly : h.typical_nightly;
+  return nightly ? nightly * h.nights * h.rooms : null;
+}
+function tripCost(flightPrice) { return flightPrice + (hotelEstimate() || 0); }
+function fits(flightPrice) { return !budget() || tripCost(flightPrice) <= budget(); }
+
+$("#budget").addEventListener("input", () => {
+  if (state.status) state.status.budget = budget();
+  if (state.cal) renderCalendar(state.cal);
+  if (state.lastFlights) renderFlights(state.lastFlights.list, state.lastFlights.leg, true);
+  renderBudget();
+});
+$("#budget").addEventListener("change", () => api("/api/settings", { budget: budget() }).catch(() => {}));
+
 function routeQuery() { return `${$("#from").value.trim()} > ${$("#to").value.trim()}`; }
 function splitRoute(q) {
   const parts = String(q || "").split(/\s*(?:>|→|\bto\b)\s*/i);
@@ -179,6 +202,7 @@ $("#search-form").addEventListener("submit", async (e) => {
   $("#from").value = cal.origin.city.toUpperCase();
   $("#to").value = cal.dest.city.toUpperCase();
   drawRoute();
+  state.cal = cal;
   renderCalendar(cal);
   renderBudget();
   loadStatus();
@@ -228,6 +252,7 @@ function renderCalendar(cal) {
   const top = new Set(priciest.map((c) => c.out_date));
   const start = $("#start").value;
   const end = addDays(start, 60);
+  const B = budget();
 
   const months = [];
   let d = new Date(start.slice(0, 7) + "-01T00:00:00Z");
@@ -239,25 +264,43 @@ function renderCalendar(cal) {
     const first = (new Date(Date.UTC(y, mo, 1)).getUTCDay() + 6) % 7; // Monday first
     const days = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
     let cells = ["M", "T", "W", "T", "F", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("");
-    for (let i = 0; i < first; i++) cells += `<div class="day empty"></div>`;
-    for (let day = 1; day <= days; day++) {
+    // In the month the search starts, skip the weeks before it.
+    let firstDay = 1;
+    if (start.slice(0, 7) === `${y}-${String(mo + 1).padStart(2, "0")}`) {
+      const sd = +start.slice(8, 10), wd = (new Date(start + "T00:00:00Z").getUTCDay() + 6) % 7;
+      if (sd - wd > 1) firstDay = sd - wd;
+    }
+    if (firstDay === 1) for (let i = 0; i < first; i++) cells += `<div class="day empty"></div>`;
+    for (let day = firstDay; day <= days; day++) {
       const ds = iso(new Date(Date.UTC(y, mo, day)));
       const p = prices[ds];
       if (!p) { cells += `<div class="day ${ds < start || ds > end ? "empty" : "none"}"><span class="d">${ds < start || ds > end ? "" : day}</span></div>`; continue; }
       const q = p.price <= q1 ? "q0" : p.price >= q3 ? "q2" : "q1";
-      cells += `<button class="day ${q} ${best.has(ds) ? "best" : ""} ${top.has(ds) ? "top" : ""}" data-out="${ds}" data-ret="${esc(p.ret_date || "")}" title="${esc(tip(p))}">
+      const fitCls = B ? (fits(p.price) ? "fits" : "over") : "";
+      cells += `<button class="day ${q} ${fitCls} ${best.has(ds) ? "best" : ""} ${top.has(ds) ? "priciest" : ""} ${ds === state.outDate ? "sel" : ""}" data-out="${ds}" data-ret="${esc(p.ret_date || "")}" title="${esc(tip(p))}">
         <span class="d">${day}</span><span class="p">${short(p.price)}</span></button>`;
     }
     return `<div class="month"><h3>${m.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}</h3><div class="grid">${cells}</div></div>`;
   }).join("");
   const legend = `<div class="cal-legend"><span><i class="lg0"></i>cheap</span><span><i class="lg1"></i>average</span>
-    <span><i class="lg2"></i>expensive</span><span><i class="lg1 lgb"></i>cheapest days</span><span><i class="lg1 lgt"></i>priciest days</span></div>`;
-  $("#calendar").innerHTML = legend + grid;
+    <span><i class="lg2"></i>expensive</span><span><i class="lg1 lgb"></i>cheapest days</span><span><i class="lg1 lgt"></i>priciest days</span>${B ? `<span><i class="lg1 lgf">✓</i>fits budget</span>` : ""}</div>`;
+  let fitNote = "";
+  if (B && cal.prices.length) {
+    const ok = cal.prices.filter((p) => fits(p.price));
+    const cheapestTrip = Math.min(...cal.prices.map((p) => tripCost(p.price)));
+    const what = hotelEstimate() ? `flight + ${money(hotelEstimate())} hotel`
+      : state.hotel ? "flight only: no hotel matches your hotel filters" : "flight only, hotel not counted yet";
+    fitNote = ok.length
+      ? `<p class="fit-note ok">✓ ${ok.length} date${ok.length > 1 ? "s" : ""} fit your ${money(B)} budget (${what}). Other dates are faded.</p>`
+      : `<p class="fit-note over">No dates fit your ${money(B)} budget (${what}). The cheapest trip is ${money(cheapestTrip)}, ${money(cheapestTrip - B)} over.
+          Try fewer nights, a cheaper hotel (“Fit to my budget” under Hotels) or a bigger budget.</p>`;
+  }
+  $("#calendar").innerHTML = legend + fitNote + grid;
 
   $$("#calendar .day[data-out]").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret, true)));
   $("#cal-note").textContent = (cal.nights ? `${cal.nights}-night round trip` : "One way") +
     ` · price per ${state.adults > 1 ? state.adults + " people" : "person"}, before bags · hover a day for the airline`;
-  const btn = (c) => `<button data-out="${c.out_date}" data-ret="${esc(c.ret_date || "")}">${niceDate(c.out_date)}${c.ret_date ? " – " + niceDate(c.ret_date, { day: "numeric", month: "short" }) : ""} · ${money(c.price)}${c.airline ? ` <small>${esc(c.airline)}</small>` : ""}</button>`;
+  const btn = (c) => `<button data-out="${c.out_date}" data-ret="${esc(c.ret_date || "")}">${niceDate(c.out_date)}${c.ret_date ? " – " + niceDate(c.ret_date, { day: "numeric", month: "short" }) : ""} · ${money(c.price)}${c.airline ? ` <small>${esc(c.airline)}</small>` : ""}${budget() && fits(c.price) ? " ✓" : ""}</button>`;
   $("#cheapest").innerHTML = (cal.cheapest.length ? `<div class="cheapest"><span class="sub">Cheapest:</span>${cal.cheapest.map(btn).join("")}</div>` : "") +
     (cal.prices.length > 5 && priciest.length && priciest[0].price > vals[0] ? `<div class="cheapest priciest"><span class="sub">Most expensive:</span>${priciest.map(btn).join("")}</div>` : "");
   $$("#cheapest button").forEach((b) => b.addEventListener("click", () => pickDate(b.dataset.out, b.dataset.ret, true)));
@@ -290,6 +333,12 @@ async function pickDate(out, ret, byClick) {
   }
 }
 
+function budgetTag(price) {
+  if (!budget() || !price) return "";
+  const over = tripCost(price) - budget();
+  return over <= 0 ? `<span class="btag ok">fits budget</span>` : `<span class="btag over">trip ${money(over)} over</span>`;
+}
+
 function flightRow(f, i) {
   const legs = f.flights || [];
   if (!legs.length) return "";
@@ -302,29 +351,32 @@ function flightRow(f, i) {
     <div class="airline">${f.airline_logo ? `<img src="${esc(f.airline_logo)}" alt="">` : ""}
       <div>${esc(airlines)}<div class="fn">${legs.map((l) => esc(l.flight_number)).join(" · ")} · ${esc(a.departure_airport.id)}→${esc(z.arrival_airport.id)}</div></div></div>
     <div class="dur">${dur(f.total_duration)}<br>${stops ? stops + " stop" + (stops > 1 ? "s" : "") : "Nonstop"}</div>
-    <div class="price">${money(f.price)}<small>${state.nights ? "round trip" : "one way"}, from</small></div>
+    <div class="price">${money(f.price)}<small>${state.nights ? "round trip" : "one way"}, from</small>${budgetTag(f.price)}</div>
   </div>`;
 }
 
-const filters = { out: { airline: null, nonstop: false }, ret: { airline: null, nonstop: false } };
+const filters = { out: { airline: null, nonstop: false, inBudget: false }, ret: { airline: null, nonstop: false, inBudget: false } };
 
 function airlineOf(f) { return [...new Set((f.flights || []).map((l) => l.airline))].join(" + "); }
 
 function renderFlights(list, leg, keepFilter) {
   const el = $("#flights");
-  if (!keepFilter) filters[leg] = { airline: null, nonstop: false };
+  if (!keepFilter) filters[leg] = { airline: null, nonstop: false, inBudget: false };
+  state.lastFlights = { list, leg };
   const flt = filters[leg];
   if (!list.length) { el.innerHTML = `<p class="sub">No flights listed for this date.</p>`; return; }
   const lows = {};
   list.forEach((f) => { const a = airlineOf(f); if (f.price && (!lows[a] || f.price < lows[a])) lows[a] = f.price; });
   const airlines = Object.keys(lows).sort((a, b) => lows[a] - lows[b]);
   const shown = list.map((f, i) => [f, i]).filter(([f]) =>
-    (!flt.airline || airlineOf(f) === flt.airline) && (!flt.nonstop || (f.flights || []).length === 1));
+    (!flt.airline || airlineOf(f) === flt.airline) && (!flt.nonstop || (f.flights || []).length === 1) &&
+    (!flt.inBudget || fits(f.price)));
   const bar = `<div class="filters"><button data-a="" class="${flt.airline ? "" : "on"}">All airlines</button>` +
     airlines.map((a) => `<button data-a="${esc(a)}" class="${flt.airline === a ? "on" : ""}">${esc(a)} · ${short(lows[a])}</button>`).join("") +
-    `<label><input type="checkbox" class="nonstop" ${flt.nonstop ? "checked" : ""}> Nonstop only</label></div>`;
+    `<label><input type="checkbox" class="nonstop" ${flt.nonstop ? "checked" : ""}> Nonstop only</label>` +
+    (budget() ? `<label><input type="checkbox" class="inbudget" ${flt.inBudget ? "checked" : ""}> Within budget</label>` : "") + `</div>`;
   const html = `<div class="leg-label">${leg === "ret" ? "Return" : state.nights ? "Outbound" : "Flights"}</div>` + bar +
-    (shown.length ? shown.map(([f, i]) => flightRow(f, i)).join("") : `<p class="sub">No flights match these filters.</p>`);
+    (shown.length ? shown.map(([f, i]) => flightRow(f, i)).join("") : `<p class="sub">No flights match these filters${flt.inBudget ? " within your budget" : ""}.</p>`);
   if (leg === "out") el.innerHTML = html;
   else {
     $$(".ret-wrap", el).forEach((x) => x.remove());
@@ -335,6 +387,8 @@ function renderFlights(list, leg, keepFilter) {
     e.stopPropagation(); flt.airline = b.dataset.a || null; renderFlights(list, leg, true);
   }));
   $(".filters .nonstop", scope).addEventListener("change", (e) => { flt.nonstop = e.target.checked; renderFlights(list, leg, true); });
+  const ib = $(".filters .inbudget", scope);
+  if (ib) ib.addEventListener("change", (e) => { flt.inBudget = e.target.checked; renderFlights(list, leg, true); });
   $$(".row", scope).forEach((r) => r.addEventListener("click", () => {
     $$(".row", scope).forEach((x) => x.classList.remove("picked"));
     if (leg === "out") $$(".ret-wrap", el).forEach((x) => x.remove());
@@ -429,6 +483,7 @@ async function loadHotels() {
     });
     state.hotel = h;
     renderHotels();
+    refreshBudgetViews();
     drawHotels(h.hotels);
     renderBudget();
     loadStatus();
@@ -451,16 +506,37 @@ function renderHotels() {
     if (e.target.closest("a")) return;
     const i = +el.dataset.i;
     state.hotelPick = state.hotelPick === i ? null : i;
-    renderHotels(); renderBudget();
+    renderHotels(); renderBudget(); refreshBudgetViews();
   }));
 }
+
+// Hotel price changed: update which dates and flights fit the budget.
+function refreshBudgetViews() {
+  if (!budget()) return;
+  if (state.cal) renderCalendar(state.cal);
+  if (state.lastFlights) renderFlights(state.lastFlights.list, state.lastFlights.leg, true);
+}
+
+$("#h-fit").addEventListener("click", () => {
+  const msg = $("#h-msg");
+  msg.textContent = "";
+  if (!budget()) { msg.textContent = "Add a budget in the search bar first."; return; }
+  if (state.flightTotal == null) { msg.textContent = "Pick a date first, so the flight price is known."; return; }
+  const left = budget() - state.flightTotal;
+  if (left <= 0) { msg.textContent = `The flight alone uses your budget (${money(-left)} over), so there's nothing left for a hotel.`; return; }
+  const perNight = Math.floor(left / ((state.hotel ? state.hotel.nights : hotelNights()) * rooms()));
+  $("#h-max").value = perNight;
+  msg.className = "msg ok";
+  msg.textContent = `${money(left)} left after the flight, so up to ${money(perNight)} a night.`;
+  loadHotels();
+});
 
 $("#hotel-opts").addEventListener("submit", (e) => { e.preventDefault(); if (state.route && state.outDate) loadHotels(); });
 $$("#h-stars, #h-sort").forEach((s) => s.addEventListener("change", () => { if (state.route && state.outDate) loadHotels(); }));
 
 function renderBudget() {
   const el = $("#budget-card");
-  const budget = (state.status && state.status.budget) || 0;
+  const budget = +$("#budget").value || 0;
   const f = state.flightTotal;
   const picked = state.hotel && state.hotelPick != null ? state.hotel.hotels[state.hotelPick] : null;
   const nightly = picked ? picked.nightly : state.hotel && state.hotel.typical_nightly;
