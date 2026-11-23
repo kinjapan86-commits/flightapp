@@ -21,11 +21,15 @@ const state = {
 
 /* ---------- helpers ---------- */
 
+const NO_SERVER = "Online preview: searching only works in the app on your Mac (localhost:8765)";
+
 async function api(path, body) {
   const opts = body === undefined ? {} : {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   };
-  const res = await fetch(path, opts);
+  let res;
+  try { res = await fetch(path, opts); } catch { throw new Error(NO_SERVER); }
+  if (!(res.headers.get("content-type") || "").includes("application/json")) throw new Error(NO_SERVER);
   const data = await res.json().catch(() => ({ error: "Bad response" }));
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -91,8 +95,10 @@ async function loadStatus() {
     mode.innerHTML = `Live · <span class="num">${s.calls_this_month}</span> of ~${s.free_limit} SerpApi searches used this month · flight lists are free`;
   }
   const pick = $("#currency-pick");
-  if (![...pick.options].some((o) => o.value === s.currency)) pick.insertAdjacentHTML("beforeend", `<option>${esc(s.currency)}</option>`);
-  pick.value = s.currency;
+  if (s.currency) {
+    if (![...pick.options].some((o) => o.value === s.currency)) pick.insertAdjacentHTML("beforeend", `<option>${esc(s.currency)}</option>`);
+    pick.value = s.currency;
+  }
   $("#city-list").innerHTML = s.cities.map((c) => `<option value="${esc(c)}">`).join("");
   if (s.budget && !$("#budget").value) $("#budget").value = s.budget;
   const seen = new Set();
@@ -616,5 +622,5 @@ $("#save-bags").addEventListener("click", async () => {
 
 /* ---------- go ---------- */
 
-loadStatus().catch((e) => { $("#mode").textContent = "Can't reach the app: " + e.message; });
+loadStatus().catch((e) => { $("#mode").textContent = e.message; });
 ensureMap();

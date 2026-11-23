@@ -223,3 +223,6 @@ tr.top-pick td:first-child { box-shadow: inset 3px 0 0 var(--good); }
 }
 .filters button.on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .filters label { font: 12px var(--mono); color: var(--ink-2); margin-left: 6px; cursor: pointer; }
+
+.top nav a { white-space: nowrap; }
+.mode { text-align: right; }
