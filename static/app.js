@@ -158,10 +158,12 @@ $("#search-form").addEventListener("submit", async (e) => {
     $("#hotels-block").hidden = true;
     loading($("#calendar"), "Finding the cheapest dates");
     $("#cheapest").innerHTML = "";
-    cal = await api("/api/calendar", {
+    const calParams = {
       q: routeQuery(), nights: state.nights, start: $("#start").value, days: 60,
       adults: state.adults, bags: state.bags,
-    });
+    };
+    cal = await api("/api/calendar", calParams);
+    if (cal.chunks) await loadCalendarChunks(cal, calParams);
   } catch (err) {
     $("#search-msg").textContent = err.message;
     $("#calendar").innerHTML = "";
@@ -178,6 +180,32 @@ $("#search-form").addEventListener("submit", async (e) => {
   if (cal.cheapest.length) pickDate(cal.cheapest[0].out_date, cal.cheapest[0].ret_date);
   else $("#search-msg").textContent = "No prices came back for these dates. Try another month or a nearby airport.";
 });
+
+// On Cloudflare the free calendar is fetched a few days per request.
+async function loadCalendarChunks(cal, params) {
+  const days = [];
+  for (let d = cal.start; d <= cal.end; d = addDays(d, cal.chunk_days)) days.push(d);
+  let done = 0, failed = 0;
+  const note = () => { $("#cal-note").textContent = `Checking prices: ${Math.round((done / days.length) * 100)}%`; };
+  $("#calendar").innerHTML = "";
+  $("#results").classList.remove("hidden");
+  note();
+  const queue = [...days];
+  const worker = async () => {
+    while (queue.length) {
+      const chunk = queue.shift();
+      try {
+        const r = await api("/api/calendar", { ...params, chunk });
+        cal.prices.push(...r.prices);
+      } catch { failed++; }
+      done++; note();
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  cal.prices.sort((x, y) => (x.out_date < y.out_date ? -1 : 1));
+  cal.cheapest = [...cal.prices].sort((x, y) => x.price - y.price).slice(0, 5);
+  if (!cal.prices.length && failed) throw new Error("Couldn't get prices from Google Flights right now. Try again in a minute.");
+}
 
 function renderCalendar(cal) {
   const prices = {};

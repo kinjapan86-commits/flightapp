@@ -47,6 +47,20 @@ key from the dashboard, and paste it in the app's **Settings**.
 Repeating the same search within 6 hours is free (it's cached). The top-right corner
 shows how many SerpApi searches you've used this month.
 
+## Online version (Cloudflare Pages)
+
+The same app also runs on Cloudflare at your `*.pages.dev` address, so you can use it from any
+device with your Mac off. The page is the same (`static/`); the server part is rewritten in
+JavaScript in `functions/` and `server/`, and saved flights live in a Cloudflare D1 database.
+It's separate from the Mac version: each keeps its own saved flights and settings.
+
+Cloudflare setup (once):
+- Build settings: Framework preset None, no build command, build output directory `static`.
+- Settings → Bindings → add a D1 database binding named `DB` pointing at your `flightapp` database.
+- Settings → Variables and Secrets → add a **Secret** named `APP_PASSWORD`. The site asks for it
+  (any username works). Without it the site stays locked.
+- Redeploy after changing bindings or secrets.
+
 ## How the "full price" works
 
 Google Flights lists each site selling a flight with that site's fare (taxes included).
@@ -62,5 +76,6 @@ marks it **est.** Card or payment surcharges aren't included.
 - `pricing.py` + `bag_fees.json`: works out all-in prices
 - `tracker.py`: saved flights and their price history
 - `cities.py`: city names to airport codes (add more cities here)
-- `static/`: the web page
+- `static/`: the web page (shared by both versions)
+- `functions/`, `server/`: the Cloudflare version of the server
 - `flights.db`: your saved searches and price history (created on first run)
