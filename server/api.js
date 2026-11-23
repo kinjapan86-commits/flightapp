@@ -177,7 +177,9 @@ export async function handle(request, env) {
   const fn = H[`${request.method} ${url.pathname.replace(/\/$/, "")}`];
   if (!fn) return Response.json({ error: "Not found" }, { status: 404 });
   try {
-    const store = new Store(env.DB);
+    // Use the D1 database bound to this site, whatever name it was given.
+    const d1 = env.DB || env.flightapp || Object.values(env).find((v) => v && typeof v.prepare === "function" && typeof v.batch === "function");
+    const store = new Store(d1);
     await store.init();
     let body = {};
     if (request.method === "POST") {
