@@ -183,14 +183,19 @@ $("#search-form").addEventListener("submit", async (e) => {
   renderBudget();
   loadStatus();
   if (cal.cheapest.length) pickDate(cal.cheapest[0].out_date, cal.cheapest[0].ret_date);
-  else $("#search-msg").textContent = "No prices came back for these dates. Try another month or a nearby airport.";
+  else {
+    $("#search-msg").textContent = cal.calError
+      ? cal.calError + " Showing flights for your earliest date instead."
+      : "No prices came back for these dates. Try another month or a nearby airport.";
+    if (cal.calError) pickDate($("#start").value);
+  }
 });
 
 // On Cloudflare the free calendar is fetched a few days per request.
 async function loadCalendarChunks(cal, params) {
   const days = [];
   for (let d = cal.start; d <= cal.end; d = addDays(d, cal.chunk_days)) days.push(d);
-  let done = 0, failed = 0;
+  let done = 0, failed = 0, firstErr = "";
   const note = () => { $("#cal-note").textContent = `Checking prices: ${Math.round((done / days.length) * 100)}%`; };
   $("#calendar").innerHTML = "";
   $("#results").classList.remove("hidden");
@@ -202,14 +207,14 @@ async function loadCalendarChunks(cal, params) {
       try {
         const r = await api("/api/calendar", { ...params, chunk });
         cal.prices.push(...r.prices);
-      } catch { failed++; }
+      } catch (e) { failed++; if (!firstErr) firstErr = e.message; }
       done++; note();
     }
   };
   await Promise.all(Array.from({ length: 6 }, worker));
   cal.prices.sort((x, y) => (x.out_date < y.out_date ? -1 : 1));
   cal.cheapest = [...cal.prices].sort((x, y) => x.price - y.price).slice(0, 5);
-  if (!cal.prices.length && failed) throw new Error("Couldn't get prices from Google Flights right now. Try again in a minute.");
+  if (!cal.prices.length && failed) cal.calError = "Couldn't get calendar prices: " + firstErr;
 }
 
 function renderCalendar(cal) {

@@ -6,7 +6,7 @@ import { loadBagTable, saveBagTable } from "./pricing.js";
 import * as tracker from "./tracker.js";
 
 const FREE_SEARCHES_PER_MONTH = 250;
-const CHUNK_DAYS = 3; // free calendar: days fetched per request
+const CHUNK_DAYS = 1; // free calendar: days fetched per request (keeps each request light)
 
 class BadRequest extends Error {}
 

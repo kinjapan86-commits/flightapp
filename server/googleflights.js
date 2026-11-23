@@ -61,20 +61,26 @@ async function fetchData(url) {
   if (!res.ok) throw new GoogleFlightsError("Google Flights answered with error " + res.status);
   const reader = res.body.getReader();
   const dec = new TextDecoder();
-  let text = "", start = -1;
+  const MARK = 'class="ds:1"';
+  let tail = "", found = null, sawConsent = false;
   for (;;) {
     const { done, value } = await reader.read();
-    if (value) text += dec.decode(value, { stream: !done });
-    if (start < 0) {
-      start = text.indexOf('class="ds:1"');
-      if (start < 0 && text.length > 200000) text = text.slice(-200); // keep memory small
+    const piece = value ? dec.decode(value, { stream: !done }) : "";
+    if (found === null) {
+      const look = tail + piece;
+      if (!sawConsent && (look.includes("consent.google") || look.includes("Before you continue"))) sawConsent = true;
+      const i = look.indexOf(MARK);
+      if (i >= 0) found = look.slice(i); else tail = look.slice(-MARK.length);
+    } else {
+      found += piece;
     }
-    if (start >= 0) {
-      const end = text.indexOf("</script>", start);
-      if (end >= 0) { reader.cancel().catch(() => {}); return text.slice(text.indexOf(">", start) + 1, end); }
+    if (found !== null) {
+      const end = found.indexOf("</script>");
+      if (end >= 0) { reader.cancel().catch(() => {}); return found.slice(found.indexOf(">") + 1, end); }
     }
     if (done) break;
   }
+  const text = sawConsent ? "consent.google" : "";
   if (text.includes("consent.google") || text.includes("Before you continue")) {
     throw new GoogleFlightsError("Google asked for cookie consent, so no flights came back.");
   }
